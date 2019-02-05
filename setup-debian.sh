@@ -154,6 +154,7 @@ END
 
 function install_php {
     #check_install php-cgi php5-cgi php5-cli php5-mysql
+    apt-get install -y software-properties-common
     add-apt-repository ppa:ondrej/php
     check_install php-cgi php7.2-cgi php7.2-cli php7.2-curl php7.2-common php7.2-mysql
     
