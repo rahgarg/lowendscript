@@ -123,7 +123,7 @@ function install_mysql {
     rm -f /var/lib/mysql/ib*
     cat > /etc/mysql/conf.d/lowendbox.cnf <<END
 [mysqld]
-key_buffer = 8M
+key_buffer_size = 8M
 query_cache_size = 0
 skip-innodb
 END
