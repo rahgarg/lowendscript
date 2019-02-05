@@ -126,6 +126,7 @@ function install_mysql {
 key_buffer_size = 8M
 query_cache_size = 0
 skip-innodb
+default-storage-engine=myisam
 END
     invoke-rc.d mysql start
 
