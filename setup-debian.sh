@@ -73,7 +73,36 @@ function install_dash {
     check_install dash dash
     rm -f /bin/sh
     ln -s dash /bin/sh
+    updatedb
 }
+
+
+function install_nano {
+    check_install nano nano
+}
+
+function install_htop {
+    check_install htop htop
+}
+
+function install_mc {
+    check_install mc mc
+}
+
+function install_iotop {
+    check_install iotop iotop
+}
+
+function install_iftop {
+    check_install iftop iftop
+    print_warn "Run IFCONFIG to find your net. device name"
+    print_warn "Example usage: iftop -i venet0"
+}
+
+function install_vim {
+    check_install vim vim
+}
+
 
 function install_dropbear {
     check_install dropbear dropbear
@@ -112,6 +141,50 @@ function install_exim4 {
     fi
 }
 
+
+function install_syslogd {
+    # We just need a simple vanilla syslogd. Also there is no need to log to
+    # so many files (waste of fd). Just dump them into
+    # /var/log/(cron/mail/messages)
+    check_install /usr/sbin/syslogd inetutils-syslogd
+    invoke-rc.d inetutils-syslogd stop
+
+    for file in /var/log/*.log /var/log/mail.* /var/log/debug /var/log/syslog
+    do
+        [ -f "$file" ] && rm -f "$file"
+    done
+    for dir in fsck news
+    do
+        [ -d "/var/log/$dir" ] && rm -rf "/var/log/$dir"
+    done
+
+    cat > /etc/syslog.conf <<END
+*.*;mail.none;cron.none -/var/log/messages
+cron.*                -/var/log/cron
+mail.*                -/var/log/mail
+END
+
+    [ -d /etc/logrotate.d ] || mkdir -p /etc/logrotate.d
+    cat > /etc/logrotate.d/inetutils-syslogd <<END
+/var/log/cron
+/var/log/mail
+/var/log/messages {
+    rotate 4
+    weekly
+    missingok
+    notifempty
+    compress
+    sharedscripts
+    postrotate
+        /etc/init.d/inetutils-syslogd reload >/dev/null
+    endscript
+}
+END
+
+    invoke-rc.d inetutils-syslogd start
+}
+
+
 function install_mysql {
     # Install the MySQL packages
     check_install mysqld mysql-server
@@ -123,10 +196,22 @@ function install_mysql {
     rm -f /var/lib/mysql/ib*
     cat > /etc/mysql/conf.d/lowendbox.cnf <<END
 [mysqld]
-key_buffer_size = 8M
-query_cache_size = 0
+key_buffer = 12M
+query_cache_limit = 256K
+query_cache_size = 4M
+
+init_connect='SET collation_connection = utf8_unicode_ci'
+init_connect='SET NAMES utf8' 
+character-set-server = utf8 
+collation-server = utf8_unicode_ci 
+skip-character-set-client-handshake
+default_tmp_storage_engine = MyISAM  #  -----  added for newer versions of mysql
+default_storage_engine = MyISAM
 skip-innodb
-default-storage-engine=myisam
+
+[client]
+default-character-set = utf8
+
 END
     invoke-rc.d mysql start
 
@@ -154,8 +239,11 @@ END
 
 function install_php {
     #check_install php-cgi php5-cgi php5-cli php5-mysql
+
     apt-get install -y software-properties-common
-    add-apt-repository ppa:ondrej/php
+    echo -ne '\n' |  add-apt-repository ppa:ondrej/php
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys   4F4EA0AAE5267A6C
+    apt-get update
     check_install php-cgi php7.2-cgi php7.2-cli php7.2-curl php7.2-common php7.2-mysql
     
 
@@ -376,6 +464,28 @@ function update_upgrade {
     apt-get -q -y upgrade
 }
 
+
+function fix_locale {
+    check_install multipath-tools multipath-tools
+    export LANGUAGE=en_US.UTF-8
+    export LANG=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8
+
+    # Generate locale
+    locale-gen en_US.UTF-8
+    dpkg-reconfigure locales
+}
+
+function apt_clean {
+    apt-get -q -y autoclean
+    apt-get -q -y clean
+}
+
+
+function update_timezone {
+    dpkg-reconfigure tzdata
+}
+
 ########################################################################
 # START OF PROGRAM
 ########################################################################
@@ -396,11 +506,19 @@ php)
     install_php
     ;;
 system)
+    update_timezone
     remove_unneeded
     update_upgrade
     install_dash
+    install_vim
+    install_nano
+    install_htop
+    install_mc
+    install_iotop
+    install_iftop
     install_syslogd
     install_dropbear
+    apt_clean
     ;;
 wordpress)
     install_wordpress $2
